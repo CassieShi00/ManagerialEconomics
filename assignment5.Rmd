@@ -1,0 +1,229 @@
+---
+title: "Assignment5"
+author: "Xiangting Shi"
+date: "2023-11-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+setwd("/Users/admin/Downloads/")
+data <- read.csv("cps_extract_2003.csv")
+library(dplyr)
+library("wooldridge")
+library(psych)
+library(car)
+library(data.table)
+library(foreign)
+library(dplyr)
+library(readxl)
+library(ggplot2)
+attach(data)
+```
+#####0.
+######a.
+```{r}
+data$log_annual_earnings <- log(data$earnings)
+```
+#####1.
+######a.
+```{r}
+ggplot(data, aes(x=educ, y=earnings)) +
+geom_point() +
+labs(title="Earnings vs. Education",
+x="Years of education",
+y="Annual earnings in 2002")
+#the variance of earnings is different for all levels of education, with higher education, the variance of earnings becomes larger.
+```
+######b.
+```{r}
+model1 <- lm(formula = earnings ~ educ, data = data)
+summary(model1)
+residual <- residuals(model1)   
+plot(residual~data$educ,
+     xlab="Education",  ylab="Residuals",
+     main = "How residuals varies across education levels")
+#appear to be heteroskedasticity in the data,with higher education, people have more choices when they choose a career.
+```
+######c.
+```{r}
+fitted <- fitted(model1)
+plot(residual~fitted)
+#there is heteroskedasticity in the data,and it look like the graph in partB, since the predicted value of earnings have the same trend with the education.
+```
+#####d.
+```{r}
+a <- 0.05  # alpha = 0.05 level of significance
+model1 <- lm(formula = earnings ~ educ, data = data)   # 1. run regression: 
+residual <- residuals(model1)               # 2. get residuals
+residual.sq <- residual^2         # 3. get squared residuals
+# 4. Regress the squared residuals on the regressors from the model
+residual.regression <- lm(residual.sq ~ educ,data=data)
+F.stat <- summary(residual.regression)$fstatistic["value"]
+
+n <- dim(data)[1]
+k <- 1                                      # 4. Number of the regressors
+F.critical <- qf(1-a, k, n-k-1) # get critical value
+F.stat
+F.critical
+#F.stat<F.critical,we reject the null hypothesis.
+```
+######e.
+```{r}
+# 1. Compute LM statistic
+Lagrange.stat <- n*summary(residual.regression)$r.squared
+# 2. Get Chi-sq critical value
+k<- 1 # number of regressors
+chi.critical  <- qchisq(1-a, k)
+# 3. Compute corresponding p-value
+pval.chi      <- 1-pchisq(Lagrange.stat,k)
+Lagrange.stat
+chi.critical
+pval.chi
+#test stat is greater than critical value, we reject the null hypothesis.
+```
+######f.
+```{r}
+install.packages("lmtest")
+library(lmtest)
+install.packages("sandwich")
+library(sandwich)
+coeftest(model1, vcov = vcovHC(model1, cluster = "HC0"))
+# This is the old result
+summary(model1)
+#the value of the corrected standard error for alpha_1 is 354.34,for corrected standard error is greater and the absolute value of  t-statistic is smaller.
+```
+######g.
+```{r}
+library(dplyr)
+# 1. Make weight variable
+data <- data %>% mutate(weight.educ = 1/educ)
+ # check if there are rows with education = 0, which will have undefined weight
+nrow(data %>% filter(educ==0)) 
+# In this case, there is none, but if there are, you have to exclude those observations
+
+wls.fit1 <- lm(earnings ~ educ, 
+               data = data,
+               weights = weight.educ, 
+               subset = (educ!=0))
+summary(wls.fit1)
+summary(model1)
+#the estimate of WLS is  3531.1, the estimate of OLS is 4745.2. The SE for WLS is 223.8 and the SE for OLS is 309.4. The WLS yields smaller standard errors. Since WLS are more efficient than OLS,the SE supposed to be smaller.
+```
+######h.
+```{r}
+# First you need to run the regression and get the residuals
+olsfit2   <- lm(earnings ~ educ, data = data)  # run regression
+residual2 <- residuals(olsfit2)                            # get residuals
+residual.sq2 <- resid(olsfit2)^2                           # get squared residuals
+g <- log(residual.sq2)                                    # squared log(squared residuals)
+gfit  <- lm(g ~ educ,data = data)                      # regress g on regressors
+h.hat <- exp(fitted(gfit))                               # exp(g_hat)
+fgls.fit <- lm(earnings~educ, data=data, weights = 1/h.hat) # run regressor on weights = 1/h_hat
+summary(fgls.fit)
+coef(fgls.fit)[2]
+#The estimate of alpha_1 using FGLS is 3214.3, the value of the standard error is 212.9 in FGLS, the value of the corrected standard error for alpha_1 is 354.34 in part F.
+```
+######i.
+```{r}
+model2  <- lm(log_annual_earnings ~ educ, data = data)
+data$residuals_model2 <- residuals(model2)
+plot(data$educ, data$residuals_model2)
+#appear to be heteroskedasticity in the data
+```
+######j.
+```{r}
+bptest(model2)
+#p-value<-0.2266>0.05, we fail to reject the null hypothesis
+```
+#####4.
+######（1）
+```{r}
+setwd("/Users/admin/Downloads/")
+data2 <- read.csv("MURDER.csv")
+install.packages("plm")
+library(plm)
+#beta_1 should be negative,beta_2 can be positive, since with higher employment rate there maybe less murder rate. 
+```
+######(2)
+```{r}
+# Filter the data for years 1990 and 1993
+data3 <- data2 %>% filter(year %in% c(90, 93))
+
+# Run the pooled OLS model
+pooling <- plm(mrdrte ~ exec+unem+d93,
+               data  = data3,
+               index = c("id","year"),   # `id` is like "individual" and `t` is like "time"
+               model = "pooling")
+summary(pooling)$coefficient
+#The p-value of beta_1 is quite big, so it is not very significant.
+```
+######(3)
+```{r}
+first.diff <- plm(mrdrte ~ exec+unem, 
+               data  = data3, 
+               index = c("id","year"),
+               model = "fd")         # This denotes first-difference
+summary(first.diff)$coefficient
+#From the p-value of beta_1,we can say that the result is quiet significant.
+```
+######(4)
+```{r}
+# Calculate robust standard errors for the pooled OLS
+coeftest(first.diff, vcov = vcovHC(first.diff, type = "HC0"))
+
+```
+######(5)
+```{r}
+library(dplyr)
+# Filter the data for years 1990 and 1993
+data4 <- data2 %>% filter(year %in% c(93))
+# Find the state with the maximum execution rate in 1993
+state_max_exec <- data4 %>% 
+  arrange(desc(exec)) %>% 
+  top_n(1, exec)
+
+# Compare it with the second highest
+state_second_max_exec <- data4 %>% 
+  arrange(desc(exec)) %>% 
+  slice(2)
+
+# Display the results
+print(state_max_exec)
+print(state_second_max_exec)
+
+# Calculate the difference
+difference <- state_max_exec$exec - state_second_max_exec$exec
+print(difference)
+```
+######(6)
+```{r}
+# Dropping Texas from the analysis and first differencing
+data_no_texas <- data2 %>% 
+  filter(state != "TX")
+
+fd_model <- lm(cmrdrte~cunem+cexec, data = data_no_texas, subset=(year==93))
+summary(fd_model)
+
+# Robust standard errors for the first differenced model
+fd_robust_se <- coeftest(fd_model, vcov = vcovHC(fd_model, type = "HC0"))
+print(fd_robust_se)
+#The estimators are smaller compared to the formal regression model, since we drop the biggest observation, which means we decrease the variance.
+```
+######(7)
+```{r}
+install.packages("plm")
+library(plm)
+fe_model_all_years <- plm(mrdrte ~ exec + unem, data = data2, index = c("state", "year"), model = "within", effect = "twoways")
+summary(fe_model_all_years)
+summary(first.diff)
+#The result is more significant when we only include the year 1990 and 1993.
+```
+
+
+
+
+
