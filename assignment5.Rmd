@@ -223,7 +223,8 @@ summary(first.diff)
 #The result is more significant when we only include the year 1990 and 1993.
 ```
 ######(8)
-
+install.packages("plm")
+fd_model <- lm(cmrdrte~cunem+cexec, data = data_no_texas, subset=(year==93))
 
 
 
