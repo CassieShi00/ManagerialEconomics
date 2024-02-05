@@ -8,7 +8,7 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-
+Model changes
 ```{r}
 setwd("/Users/admin/Downloads/")
 data <- read.csv("cps_extract_2003.csv")
